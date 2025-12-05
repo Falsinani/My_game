@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Advanced Number Runner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+    body {
+        margin: 0;
+        background: #00c8ff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: Arial, sans-serif;
+        user-select: none;
+        touch-action: manipulation;
+    }
+
+    #gameContainer {
+        position: relative;
+    }
+
+    canvas {
+        background: #e0e3f0;
+        border-radius: 10px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        transition: transform 0.2s ease;
+    }
+
+    #ui {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        font-size: 22px;
+        font-weight: bold;
+        text-shadow: 0 0 4px black;
+    }
+
+    #startScreen {
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.7);
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 20px;
+    }
+
+    #startScreen button {
+        margin-top: 15px;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 20px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+</style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="game" width="360" height="640"></canvas>
+    <div id="ui">Value: <span id="value">1</span></div>
+
+    <div id="startScreen">
+        <h2>⚡ Number Runner — Advanced Edition</h2>
+        <p>مع حركة تكبير وتصغير، انتقالات سلسة، وسرعة ديناميكية!</p>
+        <button id="startBtn">ابدأ اللعبة</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const valueSpan = document.getElementById("value");
+const startScreen = document.getElementById("startScreen");
+const startBtn = document.getElementById("startBtn");
+
+const lanes = 3;
+const laneWidth = canvas.width / lanes;
+
+// ❗ اللاعب أصبح لديه خصائص إضافية: تكبير وإهتزاز
+const player = {
+    lane: 1,
+    targetLane: 1,
+    y: canvas.height - 150,
+    width: 60,
+    height: 60,
+    value: 1,
+    scale: 1,
+    shake: 0
+};
+
+let speed = Math.random() * 3 + 3;
+let items = [];
+let spawnTimer = 0;
+let running = false;
+let gameOver = false;
+
+// ❗ تغيير السرعة تلقائياً
+setInterval(() => {
+    speed = Math.random() * 4 + 3; // بين 3 و 7
+}, 5000);
+
+
+// ------------------------------------------------------------
+// 🎨 رسم المسار
+// ------------------------------------------------------------
+function drawTrack() {
+    ctx.fillStyle = "#d2d6eb";
+    const stripeHeight = 40;
+    for (let y = 0; y < canvas.height; y += stripeHeight) {
+        if ((y / stripeHeight) % 2 === 0)
+            ctx.fillRect(0, y, canvas.width, stripeHeight);
+    }
+
+    ctx.strokeStyle = "#b0b4c8";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+    // خطوط المسارات
+    ctx.strokeStyle = "#c0c4d8";
+    ctx.lineWidth = 2;
+    for (let i = 1; i < lanes; i++) {
+        const x = i * laneWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, 10);
+        ctx.lineTo(x, canvas.height - 10);
+        ctx.stroke();
+    }
+}
+
+
+// ------------------------------------------------------------
+// 👤 رسم اللاعب
+// ------------------------------------------------------------
+function drawPlayer() {
+    let shakeOffset = (player.shake > 0) ? (Math.random() * 10 - 5) : 0;
+    const currentX = player.lane * laneWidth + laneWidth/2;
+
+    const size = player.width * player.scale;
+
+    ctx.fillStyle = "#346dff";
+    ctx.fillRect(
+        currentX - size/2 + shakeOffset,
+        player.y - (size - player.height),
+        size,
+        size
+    );
+
+    ctx.fillStyle = "white";
+    ctx.font = `bold ${28 * player.scale}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+        player.value,
+        currentX + shakeOffset,
+        player.y - (size - player.height)/2
+    );
+
+    if (player.scale > 1) player.scale -= 0.02;
+    if (player.scale < 1) player.scale = 1;
+
+    if (player.shake > 0) player.shake--;
+}
+
+
+// ------------------------------------------------------------
+// 💥 توليد عناصر عشوائية
+// ------------------------------------------------------------
+function spawnItem() {
+    const lane = Math.floor(Math.random() * lanes);
+
+    const isPlus = Math.random() < 0.6;
+    const amount = Math.floor(Math.random() * 5) + 1;
+
+    items.push({
+        lane,
+        y: -50,
+        type: isPlus ? "plus" : "minus",
+        amount,
+        alpha: 0 // تأثير fade-in
+    });
+}
+
+
+// ------------------------------------------------------------
+// 🎁 رسم العناصر + تأثير fade-in
+// ------------------------------------------------------------
+function drawItems() {
+    items.forEach(item => {
+        const x = item.lane * laneWidth + laneWidth/2 - 30;
+        const y = item.y;
+
+        item.alpha += 0.05;
+        ctx.globalAlpha = Math.min(1, item.alpha);
+
+        if (item.type === "plus") {
+            ctx.fillStyle = "#3acb4f";
+            ctx.fillRect(x, y, 60, 40);
+            ctx.fillStyle = "white";
+            ctx.font = "bold 22px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("+" + item.amount, x + 30, y + 20);
+
+        } else {
+            ctx.fillStyle = "#ff3333";
+            ctx.fillRect(x, y, 60, 40);
+            ctx.fillStyle = "black";
+            ctx.font = "bold 22px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("-" + item.amount, x + 30, y + 20);
+        }
+
+        ctx.globalAlpha = 1;
+    });
+}
+
+
+// ------------------------------------------------------------
+// ⚡ تحديث العناصر + الصدام
+// ------------------------------------------------------------
+function updateItems() {
+    spawnTimer--;
+    if (spawnTimer <= 0) {
+        spawnItem();
+        spawnTimer = 50;
+    }
+
+    items.forEach(item => {
+        item.y += speed;
+    });
+
+    items = items.filter(item => item.y < canvas.height + 60);
+
+    // صدام
+    const playerCenterY = player.y + player.height/2;
+
+    items.forEach((item, index) => {
+        if (item.lane === player.lane) {
+            if (Math.abs(item.y - playerCenterY) < 50) {
+
+                // تقريبًا نفس مسار اللاعب
+                if (item.type === "plus") {
+                    player.value += item.amount;
+                    player.scale = 1.4; // تكبير
+                } else {
+                    player.value -= item.amount;
+                    player.scale = 0.8; // تصغير
+                    player.shake = 10; // اهتزاز الشاشة
+                }
+
+                valueSpan.textContent = player.value;
+                items.splice(index, 1);
+
+                if (player.value <= 0) {
+                    gameOver = true;
+                    canvas.style.transform = "scale(0.8)";
+                }
+            }
+        }
+    });
+}
+
+
+// ------------------------------------------------------------
+// 🕹️ الانتقال السلس بين المسارات
+// ------------------------------------------------------------
+function smoothLaneMovement() {
+    if (player.lane < player.targetLane)
+        player.lane += 0.1;
+    if (player.lane > player.targetLane)
+        player.lane -= 0.1;
+
+    player.lane = Math.max(0, Math.min(2, player.lane));
+}
+
+
+// ------------------------------------------------------------
+// 🔁 حلقة اللعبة
+// ------------------------------------------------------------
+function gameLoop() {
+    if (!running) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawTrack();
+    smoothLaneMovement();
+    drawPlayer();
+    drawItems();
+
+    if (!gameOver) {
+        updateItems();
+        requestAnimationFrame(gameLoop);
+    }
+}
+
+
+// ------------------------------------------------------------
+// 🕹️ التحكم
+// ------------------------------------------------------------
+function moveLeft() {
+    if (player.targetLane > 0)
+        player.targetLane--;
+}
+
+function moveRight() {
+    if (player.targetLane < lanes - 1)
+        player.targetLane++;
+}
+
+canvas.addEventListener("touchstart", e => {
+    const x = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+    if (x < canvas.width/2) moveLeft();
+    else moveRight();
+});
+
+window.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") moveLeft();
+    if (e.key === "ArrowRight") moveRight();
+});
+
+
+// ------------------------------------------------------------
+// ▶️ بدء اللعبة
+// ------------------------------------------------------------
+startBtn.onclick = () => {
+    startScreen.style.display = "none";
+    running = true;
+    gameLoop();
+};
+</script>
+
+</body>
+</html>
