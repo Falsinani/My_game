@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Number Runner – Dark Neon v5</title>
+
+<!-- تشغيل اللعبة كتطبيق ويب فل سكرين على iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<!-- منع التكبير وجعلها فل سكرين على المتصفح -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    position: fixed;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    overscroll-behavior: none;
+    background: #050510;
+    touch-action: none;
+    font-family: Arial, sans-serif;
+  }
+
+  #gameContainer {
+    position: absolute;
+    inset: 0;
+  }
+
+  canvas {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    background: radial-gradient(circle at center, #202233 0%, #050510 70%);
+    touch-action: none;
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 92%;
+    color: #0ff;
+    text-shadow: 0 0 6px #0ff;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  #topInfo {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+
+  #progressOuter {
+    width: 100%;
+    height: 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+    backdrop-filter: blur(4px);
+  }
+
+  #progressInner {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #0ff, #0f0);
+    box-shadow: 0 0 10px #0ff;
+    transition: width 0.2s linear;
+  }
+
+  /* Glass blur overlays */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 25px;
+    z-index: 20;
+    backdrop-filter: blur(12px);
+    background: rgba(0, 0, 20, 0.55);
+    color: #0ff;
+    text-shadow: 0 0 6px #00f0ff;
+    border-top: 1px solid rgba(0,255,255,0.15);
+    border-bottom: 1px solid rgba(0,255,255,0.15);
+  }
+
+  .overlay h2 {
+    font-size: 26px;
+    margin-bottom: 10px;
+  }
+
+  .overlay button {
+    margin-top: 15px;
+    padding: 10px 20px;
+    border-radius: 20px;
+    border: none;
+    font-size: 16px;
+    background: #0ff;
+    font-weight: bold;
+    color: #000;
+    box-shadow: 0 0 12px #0ff;
+    cursor: pointer;
+  }
+
+  #startScreen {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+  }
+
+  /* متجر نيون */
+  #shop {
+    margin-top: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .shop-card {
+    width: 160px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgba(0,255,255,0.08);
+    border: 1px solid rgba(0,255,255,0.35);
+    box-shadow: 0 0 12px rgba(0,255,255,0.25);
+    backdrop-filter: blur(6px);
+  }
+
+  .shop-card h3 {
+    margin: 0;
+    font-size: 15px;
+    color: #0ff;
+  }
+
+  .shop-card p {
+    margin: 4px 0;
+    font-size: 12px;
+    color: #ccf;
+  }
+
+  .shop-card button {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px;
+    border-radius: 12px;
+    background: #0ff;
+    color: #000;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  /* اختيار الـ Skin */
+  #skinSelect {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 5px;
+  }
+
+  #skinSelect button {
+    padding: 6px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(0,255,255,0.4);
+    background: rgba(0,0,20,0.5);
+    color: #0ff;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  #skinSelect button.selected-skin {
+    background: #0ff;
+    color: #000;
+    box-shadow: 0 0 10px #0ff;
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="topInfo">
+      <div id="levelLabel">Level 1</div>
+      <div>Coins: <span id="coinsTop">0</span>🪙</div>
+      <div>Value: <span id="value">1</span></div>
+    </div>
+    <div id="progressOuter">
+      <div id="progressInner"></div>
+    </div>
+  </div>
+
+  <!-- شاشة البداية -->
+  <div class="overlay" id="startScreen">
+    <h2>⚡ Number Runner – Neon</h2>
+    <p>Swipe أو اضغط ← / → للتحكم</p>
+    <p style="margin-top:5px;">اختر مظهر الرقم (Skin):</p>
+    <div id="skinSelect">
+      <button data-skin="classic" class="selected-skin">Classic</button>
+      <button data-skin="neon">Neon</button>
+      <button data-skin="thermal">Thermal</button>
+      <button data-skin="outline">Outline</button>
+    </div>
+    <button id="startBtn">Start</button>
+  </div>
+
+  <!-- شاشة إنهاء المستوى -->
+  <div class="overlay" id="levelCompleteScreen">
+    <h2>Level Complete!</h2>
+    <p id="levelCompleteText"></p>
+    <p>Coins: <span id="coinsValue">0</span>🪙</p>
+
+    <h3 style="margin-top:10px;">Shop – Neon Upgrades</h3>
+    <div id="shop">
+      <div class="shop-card">
+        <h3>Boost + Values</h3>
+        <p>Level: <span id="posLevel">0</span></p>
+        <p>Cost: <span id="posCost">5</span>🪙</p>
+        <button data-upgrade="pos">Buy</button>
+      </div>
+
+      <div class="shop-card">
+        <h3>Shield from −</h3>
+        <p>Level: <span id="negLevel">0</span></p>
+        <p>Cost: <span id="negCost">5</span>🪙</p>
+        <button data-upgrade="neg">Buy</button>
+      </div>
+
+      <div class="shop-card">
+        <h3>Extra Start Value</h3>
+        <p>Level: <span id="startLevel">0</span></p>
+        <p>Cost: <span id="startCost">8</span>🪙</p>
+        <button data-upgrade="start">Buy</button>
+      </div>
+    </div>
+
+    <button id="nextLevelBtn">Next Level ➜</button>
+  </div>
+
+  <!-- شاشة Game Over -->
+  <div class="overlay" id="gameOverScreen">
+    <h2>Game Over</h2>
+    <p>Your value reached 0</p>
+    <p>Coins: <span id="coinsValueGO">0</span>🪙</p>
+    <button id="restartBtn">Restart</button>
+  </div>
+</div>
+
+<script>
+/************ منع التكبير والتمرير ************/
+document.addEventListener('touchmove', function (e) {
+  if (e.scale !== 1) e.preventDefault();
+}, { passive: false });
+
+let lastTouch = 0;
+document.addEventListener('touchend', function (e) {
+  const now = performance.now();
+  if (now - lastTouch <= 300) e.preventDefault();
+  lastTouch = now;
+}, false);
+
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+
+/************ متغيرات DOM ************/
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const levelLabel = document.getElementById("levelLabel");
+const valueSpan  = document.getElementById("value");
+const coinsTopSpan = document.getElementById("coinsTop");
+const progressInner = document.getElementById("progressInner");
+
+const startScreen = document.getElementById("startScreen");
+const levelCompleteScreen = document.getElementById("levelCompleteScreen");
+const gameOverScreen = document.getElementById("gameOverScreen");
+
+const startBtn = document.getElementById("startBtn");
+const nextLevelBtn = document.getElementById("nextLevelBtn");
+const restartBtn = document.getElementById("restartBtn");
+const levelCompleteText = document.getElementById("levelCompleteText");
+
+const coinsValueSpan   = document.getElementById("coinsValue");
+const coinsValueGOSpan = document.getElementById("coinsValueGO");
+
+const posLevelSpan   = document.getElementById("posLevel");
+const negLevelSpan   = document.getElementById("negLevel");
+const startLevelSpan = document.getElementById("startLevel");
+
+const posCostSpan   = document.getElementById("posCost");
+const negCostSpan   = document.getElementById("negCost");
+const startCostSpan = document.getElementById("startCost");
+
+const shopDiv = document.getElementById("shop");
+const skinButtons = document.querySelectorAll("#skinSelect button");
+
+
+/************ إعداد الكانفس لحجم الشاشة ************/
+const lanes = 3;
+let laneWidth;
+
+function updateCanvasSize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  laneWidth = canvas.width / lanes;
+}
+updateCanvasSize();
+window.addEventListener('resize', updateCanvasSize);
+
+
+/************ Skins ************/
+const skins = {
+  classic: { color: "#39f", glow: "#39f", outline: false },
+  neon:    { color: "#0ff", glow: "#0ff", outline: false },
+  thermal: { color: "#ff6b00", glow: "#ff0", outline: false },
+  outline: { color: "#000", glow: "#0ff", outline: true }
+};
+let currentSkin = "classic";
+
+skinButtons.forEach(btn => {
+  btn.addEventListener("click", () => {
+    skinButtons.forEach(b => b.classList.remove("selected-skin"));
+    btn.classList.add("selected-skin");
+    currentSkin = btn.getAttribute("data-skin");
+  });
+});
+
+
+/************ حالة اللاعب واللعبة ************/
+const player = {
+  lane: 1,
+  targetLane: 1,
+  y: canvas.height - 150,
+  width: 60,
+  height: 60,
+  value: 1,
+  scale: 1,
+  shake: 0
+};
+
+let level = 1;
+let distance = 0;
+// وقت المرحلة ×2
+const baseLevelLength = 5000;
+let levelLength = baseLevelLength;
+
+let items = [];
+let spawnTimer = 0;
+let spawnInterval = 55;
+
+let baseSpeed = 4;
+let speed = baseSpeed;
+let plusProbability = 0.6;
+
+let coins = 0;
+let upgrades = { pos: 0, neg: 0, start: 0 };
+
+const SAVE_KEY = "nr_darkneon_v5_save";
+
+let running = false;
+let gameOver = false;
+
+/************ Trail (ذيل نيون) ************/
+let trail = [];
+const MAX_TRAIL = 18;
+
+/************ Particles ************/
+let particles = [];
+
+
+/************ Web Audio – الأصوات ************/
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+
+function playBeep(type) {
+  if (!audioCtx) return;
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  let freq = 440;
+  let dur  = 0.12;
+
+  if (type === "plus")  { freq = 880; dur = 0.1; }
+  if (type === "minus") { freq = 220; dur = 0.15; }
+  if (type === "level") { freq = 660; dur = 0.25; }
+  if (type === "over")  { freq = 180; dur = 0.35; }
+  if (type === "wall")  { freq = 140; dur = 0.2; }
+
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+
+
+/************ الصعوبة حسب المستوى ************/
+function recalcDifficulty() {
+  levelLength     = baseLevelLength * (1 + (level - 1) * 0.25);
+  spawnInterval   = Math.max(30, 60 - (level - 1) * 5);
+  baseSpeed       = 3 + level * 0.8;
+  plusProbability = Math.max(0.3, 0.65 - (level - 1) * 0.07);
+}
+
+
+/************ تخزين التقدم ************/
+function saveGame() {
+  const data = { level, coins, upgrades };
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.level) level = data.level;
+    if (data.coins !== undefined) coins = data.coins;
+    if (data.upgrades) upgrades = data.upgrades;
+  } catch {}
+}
+
+
+/************ واجهة HUD + المتجر ************/
+function updateLabels() {
+  levelLabel.textContent = "Level " + level;
+  valueSpan.textContent  = player.value;
+  coinsTopSpan.textContent = coins;
+}
+
+function updateProgress() {
+  const ratio = Math.min(1, distance / levelLength);
+  progressInner.style.width = (ratio * 100) + "%";
+  if (ratio >= 1) handleLevelComplete();
+}
+
+function getPosCost()   { return 5 + upgrades.pos   * 5; }
+function getNegCost()   { return 5 + upgrades.neg   * 5; }
+function getStartCost() { return 8 + upgrades.start * 7; }
+
+function updateShopUI() {
+  coinsValueSpan.textContent   = coins;
+  coinsValueGOSpan.textContent = coins;
+  coinsTopSpan.textContent     = coins;
+
+  posLevelSpan.textContent   = upgrades.pos;
+  negLevelSpan.textContent   = upgrades.neg;
+  startLevelSpan.textContent = upgrades.start;
+
+  posCostSpan.textContent   = getPosCost();
+  negCostSpan.textContent   = getNegCost();
+  startCostSpan.textContent = getStartCost();
+}
+
+function handleUpgradePurchase(type) {
+  let cost = 0;
+  if (type === "pos")   cost = getPosCost();
+  if (type === "neg")   cost = getNegCost();
+  if (type === "start") cost = getStartCost();
+
+  if (coins < cost) {
+    alert("Not enough coins!");
+    return;
+  }
+
+  coins -= cost;
+  upgrades[type]++;
+  updateShopUI();
+  saveGame();
+}
+
+
+/************ رسم المسار ************/
+function drawTrack() {
+  const stripeHeight = 40;
+  for (let y = 0; y < canvas.height; y += stripeHeight) {
+    ctx.fillStyle = (y / stripeHeight) % 2 === 0 ? "#151524" : "#101020";
+    ctx.fillRect(0, y, canvas.width, stripeHeight);
+  }
+
+  // حدود
+  ctx.strokeStyle = "#0ff";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+  // خطوط المسارات
+  ctx.strokeStyle = "#26263a";
+  ctx.lineWidth = 2;
+  for (let i = 1; i < lanes; i++) {
+    const x = i * laneWidth;
+    ctx.beginPath();
+    ctx.moveTo(x, 10);
+    ctx.lineTo(x, canvas.height - 10);
+    ctx.stroke();
+  }
+
+  // خط النهاية
+  const ratio = Math.min(1, distance / levelLength);
+  if (ratio > 0.7 && !gameOver) {
+    const finishY = 80 + (1 - ratio) * (canvas.height - 160);
+    ctx.strokeStyle = "#ff0";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([10, 10]);
+    ctx.beginPath();
+    ctx.moveTo(20, finishY);
+    ctx.lineTo(canvas.width - 20, finishY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+
+/************ Trail ************/
+function updateTrail() {
+  const laneCenterX = player.lane * laneWidth + laneWidth / 2;
+  const centerY = player.y + player.height / 2;
+  trail.push({ x: laneCenterX, y: centerY, life: 1 });
+  if (trail.length > MAX_TRAIL) trail.shift();
+}
+
+function drawTrail() {
+  const skin = skins[currentSkin];
+  trail.forEach(t => {
+    ctx.globalAlpha = t.life * 0.6;
+    ctx.fillStyle = skin.glow;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, 12 * t.life, 0, Math.PI * 2);
+    ctx.fill();
+    t.life -= 0.06;
+  });
+  ctx.globalAlpha = 1;
+  trail = trail.filter(t => t.life > 0);
+}
+
+
+/************ Particles ************/
+function spawnParticles(x, y, type) {
+  const color =
+    type === "plus" ? "#00ff99" :
+    type === "minus" ? "#ff3366" :
+    type === "wall" ? "#ff0000" :
+    "#ffffff";
+
+  for (let i = 0; i < 12; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 2 + Math.random() * 2;
+    particles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      color
+    });
+  }
+}
+
+function updateAndDrawParticles() {
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.05; // جاذبية خفيفة
+    p.life -= 0.04;
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  particles = particles.filter(p => p.life > 0);
+}
+
+
+/************ رسم اللاعب ************/
+function drawPlayer() {
+  const laneCenterX = player.lane * laneWidth + laneWidth / 2;
+  const size = player.width * player.scale;
+  const offsetY = player.y - (size - player.height);
+
+  const skin = skins[currentSkin];
+  let shakeOffset = (player.shake > 0) ? (Math.random() * 10 - 5) : 0;
+
+  ctx.shadowColor = skin.glow;
+  ctx.shadowBlur = 20;
+
+  if (skin.outline) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(laneCenterX - size / 2 + shakeOffset, offsetY, size, size);
+    ctx.strokeStyle = skin.glow;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(laneCenterX - size / 2 + shakeOffset, offsetY, size, size);
+  } else {
+    ctx.fillStyle = skin.color;
+    ctx.fillRect(laneCenterX - size / 2 + shakeOffset, offsetY, size, size);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#fff";
+  ctx.font = `bold ${28 * player.scale}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(player.value, laneCenterX + shakeOffset, offsetY + size / 2);
+
+  if (player.scale > 1) player.scale -= 0.02;
+  if (player.scale < 1) player.scale = 1;
+  if (player.shake > 0) player.shake--;
+}
+
+
+/************ العناصر (+ / - / Wall) ************/
+function spawnItem() {
+  const laneIndex = Math.floor(Math.random() * lanes);
+  const rand = Math.random();
+
+  // 20% جدار (Obstacle)، والباقي +/-
+  if (rand < 0.2) {
+    const dmg = 3 + level; // ضرر كبير
+    items.push({
+      lane: laneIndex,
+      y: -70,
+      type: "wall",
+      damage: dmg,
+      alpha: 0
+    });
+  } else {
+    const isPlus = Math.random() < plusProbability;
+    const maxAmount = 3 + level;
+    const amount = Math.floor(Math.random() * maxAmount) + 1;
+    items.push({
+      lane: laneIndex,
+      y: -50,
+      type: isPlus ? "plus" : "minus",
+      amount,
+      alpha: 0
+    });
+  }
+}
+
+function drawItems() {
+  items.forEach(item => {
+    const x = item.lane * laneWidth + laneWidth / 2 - 30;
+    const y = item.y;
+
+    item.alpha += 0.05;
+    ctx.globalAlpha = Math.min(1, item.alpha);
+
+    if (item.type === "plus") {
+      ctx.fillStyle = "#00ff99";
+      ctx.shadowColor = "#00ff99";
+      ctx.shadowBlur = 15;
+      ctx.fillRect(x, y, 60, 40);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 22px Arial";
+      ctx.fillText("+" + item.amount, x + 30, y + 22);
+
+    } else if (item.type === "minus") {
+      ctx.fillStyle = "#ff3366";
+      ctx.shadowColor = "#ff3366";
+      ctx.shadowBlur = 15;
+      ctx.fillRect(x, y, 60, 40);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 22px Arial";
+      ctx.fillText("-" + item.amount, x + 30, y + 22);
+
+    } else if (item.type === "wall") {
+      ctx.fillStyle = "#ff0000";
+      ctx.shadowColor = "#ff0000";
+      ctx.shadowBlur = 18;
+      ctx.fillRect(x + 5, y, 50, 70);
+      ctx.shadowBlur = 0;
+
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x + 10, y + 10);
+      ctx.lineTo(x + 50, y + 60);
+      ctx.moveTo(x + 50, y + 10);
+      ctx.lineTo(x + 10, y + 60);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+  });
+}
+
+function updateItems() {
+  spawnTimer--;
+  if (spawnTimer <= 0) {
+    spawnItem();
+    spawnTimer = spawnInterval;
+  }
+
+  items.forEach(item => {
+    item.y += speed;
+  });
+
+  items = items.filter(item => item.y < canvas.height + 80);
+
+  const approxLaneIndex = Math.round(player.lane);
+  const playerCenterY = player.y + player.height / 2;
+
+  items.forEach((item, index) => {
+    if (item.lane === approxLaneIndex) {
+      let hitDistance = (item.type === "wall") ? 60 : 50;
+      if (Math.abs(item.y - playerCenterY) < hitDistance) {
+        const centerX = item.lane * laneWidth + laneWidth / 2;
+        const centerY = item.y + (item.type === "wall" ? 35 : 20);
+
+        if (item.type === "plus") {
+          let eff = Math.round(item.amount * (1 + upgrades.pos * 0.15));
+          if (eff < 1) eff = 1;
+          player.value += eff;
+          player.scale = 1.4;
+          coins += Math.max(1, item.amount);
+          playBeep("plus");
+          spawnParticles(centerX, centerY, "plus");
+        } else if (item.type === "minus") {
+          let eff = Math.round(item.amount * (1 - upgrades.neg * 0.12));
+          if (eff < 1) eff = 1;
+          player.value -= eff;
+          player.scale = 0.85;
+          player.shake = 10;
+          playBeep("minus");
+          spawnParticles(centerX, centerY, "minus");
+        } else if (item.type === "wall") {
+          let eff = Math.round(item.damage * (1 - upgrades.neg * 0.15));
+          if (eff < 1) eff = 1;
+          player.value -= eff;
+          player.scale = 0.8;
+          player.shake = 15;
+          playBeep("wall");
+          spawnParticles(centerX, centerY, "wall");
+        }
+
+        updateLabels();
+        updateShopUI();
+        items.splice(index, 1);
+
+        if (player.value <= 0) {
+          handleGameOver();
+        } else {
+          saveGame();
+        }
+      }
+    }
+  });
+}
+
+
+/************ حركة اللاعب ************/
+function smoothLaneMovement() {
+  if (player.lane < player.targetLane) player.lane += 0.12;
+  if (player.lane > player.targetLane) player.lane -= 0.12;
+  player.lane = Math.max(0, Math.min(2, player.lane));
+}
+
+
+/************ نهاية المرحلة و Game Over ************/
+function handleLevelComplete() {
+  if (!running || gameOver) return;
+  running = false;
+  levelCompleteText.textContent = "Ready for Level " + (level + 1) + "?";
+  updateShopUI();
+  saveGame();
+  playBeep("level");
+  levelCompleteScreen.style.display = "flex";
+}
+
+function handleGameOver() {
+  if (gameOver) return;
+  gameOver = true;
+  running = false;
+  updateShopUI();
+  saveGame();
+  playBeep("over");
+  gameOverScreen.style.display = "flex";
+}
+
+
+/************ إعادة تهيئة المستوى ************/
+function resetLevelState() {
+  distance = 0;
+  items = [];
+  trail = [];
+  particles = [];
+  spawnTimer = 0;
+  const baseStart = 1 + upgrades.start * 2;
+  player.value = baseStart;
+  player.lane = 1;
+  player.targetLane = 1;
+  player.scale = 1;
+  player.shake = 0;
+  gameOver = false;
+  recalcDifficulty();
+  updateLabels();
+  updateProgress();
+}
+
+function startLevel() {
+  resetLevelState();
+  running = true;
+  requestAnimationFrame(gameLoop);
+}
+
+
+/************ Game Loop ************/
+function gameLoop() {
+  if (!running) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawTrack();
+  smoothLaneMovement();
+  updateTrail();
+  drawTrail();
+  drawPlayer();
+  drawItems();
+  updateAndDrawParticles();
+
+  if (!gameOver) {
+    distance += speed;
+    updateProgress();
+    updateItems();
+    requestAnimationFrame(gameLoop);
+  }
+}
+
+
+/************ التحكم ************/
+function moveLeft() {
+  if (player.targetLane > 0) player.targetLane--;
+}
+
+function moveRight() {
+  if (player.targetLane < lanes - 1) player.targetLane++;
+}
+
+canvas.addEventListener('touchstart', e => {
+  initAudio();
+  const rect = canvas.getBoundingClientRect();
+  const x = e.touches[0].clientX - rect.left;
+  if (!running && !gameOver) return;
+  if (x < canvas.width / 2) moveLeft();
+  else moveRight();
+});
+
+window.addEventListener("keydown", e => {
+  initAudio();
+  if (e.key === "ArrowLeft")  moveLeft();
+  if (e.key === "ArrowRight") moveRight();
+});
+
+
+/************ المتجر + الأزرار ************/
+shopDiv.addEventListener("click", e => {
+  const btn = e.target.closest("button[data-upgrade]");
+  if (!btn) return;
+  handleUpgradePurchase(btn.getAttribute("data-upgrade"));
+});
+
+startBtn.onclick = () => {
+  initAudio();
+  startScreen.style.display = "none";
+  levelCompleteScreen.style.display = "none";
+  gameOverScreen.style.display = "none";
+  recalcDifficulty();
+  startLevel();
+};
+
+nextLevelBtn.onclick = () => {
+  level++;
+  levelCompleteScreen.style.display = "none";
+  recalcDifficulty();
+  startLevel();
+};
+
+restartBtn.onclick = () => {
+  level = 1;
+  gameOverScreen.style.display = "none";
+  recalcDifficulty();
+  startLevel();
+};
+
+
+/************ تحميل التقدم السابق ************/
+loadGame();
+recalcDifficulty();
+updateLabels();
+updateShopUI();
+
+if (level > 1 || coins > 0 || upgrades.pos || upgrades.neg || upgrades.start) {
+  startBtn.textContent = "Continue – Level " + level;
+}
+
+
+/************ تغيير السرعة ديناميكياً ************/
+setInterval(() => {
+  speed = baseSpeed + Math.random() * 2;
+}, 4000);
+</script>
+</body>
+</html>
