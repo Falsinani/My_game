@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Number Runner – Dark Neon Levels</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body {
+    margin: 0;
+    background: #050510; /* خلفية داكنة */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: Arial, sans-serif;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  #gameContainer {
+    position: relative;
+  }
+
+  canvas {
+    background: radial-gradient(circle at center, #202233 0%, #050510 70%);
+    border-radius: 12px;
+    box-shadow: 0 0 25px #0ff;
+    transition: transform 0.2s ease;
+  }
+
+  #hud {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    color: #0ff;
+    text-shadow: 0 0 6px #0ff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-weight: bold;
+  }
+
+  #topInfo {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+
+  #progressOuter {
+    width: 100%;
+    height: 8px;
+    border-radius: 10px;
+    background: #151522;
+    overflow: hidden;
+    box-shadow: 0 0 8px #000;
+  }
+
+  #progressInner {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #0ff, #0f0);
+    box-shadow: 0 0 10px #0ff;
+    transition: width 0.1s linear;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    color: #0ff;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 20px;
+    text-shadow: 0 0 6px #0ff;
+  }
+
+  .overlay h2 {
+    margin-bottom: 10px;
+  }
+
+  .overlay button {
+    margin-top: 15px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 20px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #0ff;
+    color: #000;
+    font-weight: bold;
+    box-shadow: 0 0 10px #0ff;
+  }
+
+  #startScreen { display: flex; }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="game" width="360" height="640"></canvas>
+
+  <div id="hud">
+    <div id="topInfo">
+      <div id="levelLabel">Level 1</div>
+      <div id="valueLabel">Value: <span id="value">1</span></div>
+    </div>
+    <div id="progressOuter">
+      <div id="progressInner"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="startScreen">
+    <h2>⚡ Number Runner – Dark Neon</h2>
+    <p>حرّك الرقم بين المسارات، تجنّب القيم السالبة، واجتز خط النهاية في كل مستوى.</p>
+    <p>التحكم: أسهم لوحة المفاتيح أو لمس يمين/يسار على الشاشة.</p>
+    <button id="startBtn">ابدأ من Level 1</button>
+  </div>
+
+  <div class="overlay" id="levelCompleteScreen">
+    <h2>✅ Level Complete!</h2>
+    <p id="levelCompleteText"></p>
+    <button id="nextLevelBtn">Next Level</button>
+  </div>
+
+  <div class="overlay" id="gameOverScreen">
+    <h2>💀 Game Over</h2>
+    <p>قيمة الرقم وصلت إلى 0 أو أقل.</p>
+    <button id="restartBtn">إعادة من Level 1</button>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  const levelLabel = document.getElementById("levelLabel");
+  const valueSpan = document.getElementById("value");
+  const progressInner = document.getElementById("progressInner");
+
+  const startScreen = document.getElementById("startScreen");
+  const levelCompleteScreen = document.getElementById("levelCompleteScreen");
+  const gameOverScreen = document.getElementById("gameOverScreen");
+
+  const startBtn = document.getElementById("startBtn");
+  const nextLevelBtn = document.getElementById("nextLevelBtn");
+  const restartBtn = document.getElementById("restartBtn");
+  const levelCompleteText = document.getElementById("levelCompleteText");
+
+  const lanes = 3;
+  const laneWidth = canvas.width / lanes;
+
+  const player = {
+    lane: 1,        // يستخدم كقيمة عائمة للحركة السلسة
+    targetLane: 1,  // 0,1,2
+    y: canvas.height - 150,
+    width: 60,
+    height: 60,
+    value: 1,
+    scale: 1,
+    shake: 0
+  };
+
+  let level = 1;
+  let distance = 0;
+  const baseLevelLength = 2500;
+  let levelLength = baseLevelLength;
+
+  let items = [];
+  let spawnTimer = 0;
+  let spawnInterval = 55;
+
+  let baseSpeed = 4;
+  let speed = baseSpeed;
+  let plusProbability = 0.6;
+
+  let running = false;
+  let gameOver = false;
+
+  // عشوائية السرعة مع اعتمادها على المستوى
+  setInterval(() => {
+    speed = baseSpeed + Math.random() * 2; // سرعة متغيرة
+  }, 4000);
+
+  function recalcDifficulty() {
+    levelLength = baseLevelLength * (1 + (level - 1) * 0.25);
+    spawnInterval = Math.max(30, 60 - (level - 1) * 5);   // كل ما يرتفع المستوى، تقل المدة بين العناصر
+    baseSpeed = 3 + level * 0.8;                          // سرعة أعلى مع كل مستوى
+    plusProbability = Math.max(0.3, 0.65 - (level - 1) * 0.07); // القيم السالبة تزيد احتمالها
+  }
+
+  function updateLabels() {
+    levelLabel.textContent = "Level " + level;
+    valueSpan.textContent = player.value;
+  }
+
+  function updateProgress() {
+    const ratio = Math.min(1, distance / levelLength);
+    progressInner.style.width = (ratio * 100) + "%";
+    if (ratio >= 1) {
+      handleLevelComplete();
+    }
+  }
+
+  // رسم المسار بتأثير داكن
+  function drawTrack() {
+    const stripeHeight = 40;
+    for (let y = 0; y < canvas.height; y += stripeHeight) {
+      ctx.fillStyle = (y / stripeHeight) % 2 === 0 ? "#151524" : "#101020";
+      ctx.fillRect(0, y, canvas.width, stripeHeight);
+    }
+
+    // حدود نيون
+    ctx.strokeStyle = "#0ff";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+    // خطوط المسارات
+    ctx.strokeStyle = "#26263a";
+    ctx.lineWidth = 2;
+    for (let i = 1; i < lanes; i++) {
+      const x = i * laneWidth;
+      ctx.beginPath();
+      ctx.moveTo(x, 10);
+      ctx.lineTo(x, canvas.height - 10);
+      ctx.stroke();
+    }
+
+    // خط النهاية عند قرب نهاية المستوى (للكاشف البصري)
+    const ratio = Math.min(1, distance / levelLength);
+    if (ratio > 0.7 && !gameOver) {
+      const finishY = 80 + (1 - ratio) * (canvas.height - 160);
+      ctx.strokeStyle = "#ff0";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 10]);
+      ctx.beginPath();
+      ctx.moveTo(20, finishY);
+      ctx.lineTo(canvas.width - 20, finishY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  function drawPlayer() {
+    const laneCenterX = player.lane * laneWidth + laneWidth / 2;
+    const size = player.width * player.scale;
+    const offsetY = player.y - (size - player.height);
+
+    let shakeOffset = (player.shake > 0) ? (Math.random() * 10 - 5) : 0;
+
+    ctx.fillStyle = "#39f";
+    ctx.shadowColor = "#39f";
+    ctx.shadowBlur = 15;
+    ctx.fillRect(laneCenterX - size / 2 + shakeOffset, offsetY, size, size);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${28 * player.scale}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(player.value, laneCenterX + shakeOffset, offsetY + size / 2);
+
+    if (player.scale > 1) player.scale -= 0.02;
+    if (player.scale < 1) player.scale = 1;
+    if (player.shake > 0) player.shake--;
+  }
+
+  function spawnItem() {
+    const laneIndex = Math.floor(Math.random() * lanes);
+    const isPlus = Math.random() < plusProbability;
+    const maxAmount = 3 + level;                 // القيم تكبر مع المستوى
+    const amount = Math.floor(Math.random() * maxAmount) + 1;
+
+    items.push({
+      lane: laneIndex,
+      y: -50,
+      type: isPlus ? "plus" : "minus",
+      amount,
+      alpha: 0
+    });
+  }
+
+  function drawItems() {
+    items.forEach(item => {
+      const x = item.lane * laneWidth + laneWidth / 2 - 30;
+      const y = item.y;
+
+      item.alpha += 0.05;
+      ctx.globalAlpha = Math.min(1, item.alpha);
+
+      if (item.type === "plus") {
+        ctx.fillStyle = "#00ff99";
+        ctx.shadowColor = "#00ff99";
+        ctx.shadowBlur = 15;
+        ctx.fillRect(x, y, 60, 40);
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 22px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("+" + item.amount, x + 30, y + 22);
+      } else {
+        ctx.fillStyle = "#ff3366";
+        ctx.shadowColor = "#ff3366";
+        ctx.shadowBlur = 15;
+        ctx.fillRect(x, y, 60, 40);
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 22px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("-" + item.amount, x + 30, y + 22);
+      }
+
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  function updateItems() {
+    spawnTimer--;
+    if (spawnTimer <= 0) {
+      spawnItem();
+      spawnTimer = spawnInterval;
+    }
+
+    items.forEach(item => {
+      item.y += speed;
+    });
+
+    items = items.filter(item => item.y < canvas.height + 60);
+
+    // تصادم
+    const approxLaneIndex = Math.round(player.lane);
+    const playerCenterY = player.y + player.height / 2;
+
+    items.forEach((item, index) => {
+      if (item.lane === approxLaneIndex) {
+        if (Math.abs(item.y - playerCenterY) < 50) {
+          if (item.type === "plus") {
+            player.value += item.amount;
+            player.scale = 1.4;
+          } else {
+            player.value -= item.amount;
+            player.scale = 0.85;
+            player.shake = 10;
+          }
+          updateLabels();
+          items.splice(index, 1);
+
+          if (player.value <= 0) {
+            handleGameOver();
+          }
+        }
+      }
+    });
+  }
+
+  function smoothLaneMovement() {
+    if (player.lane < player.targetLane) player.lane += 0.12;
+    if (player.lane > player.targetLane) player.lane -= 0.12;
+    player.lane = Math.max(0, Math.min(2, player.lane));
+  }
+
+  function handleGameOver() {
+    if (gameOver) return;
+    gameOver = true;
+    running = false;
+    canvas.style.transform = "scale(0.9)";
+    gameOverScreen.style.display = "flex";
+  }
+
+  function handleLevelComplete() {
+    if (!running || gameOver) return;
+    running = false;
+    canvas.style.transform = "scale(1.03)";
+    levelCompleteText.textContent = "Great! Ready for Level " + (level + 1) + "?";
+    levelCompleteScreen.style.display = "flex";
+  }
+
+  function resetLevelState() {
+    distance = 0;
+    items = [];
+    spawnTimer = 0;
+    player.value = 1;
+    player.lane = 1;
+    player.targetLane = 1;
+    player.scale = 1;
+    player.shake = 0;
+    gameOver = false;
+    canvas.style.transform = "scale(1)";
+    recalcDifficulty();
+    updateLabels();
+    updateProgress();
+  }
+
+  function startLevel() {
+    resetLevelState();
+    running = true;
+    requestAnimationFrame(gameLoop);
+  }
+
+  function gameLoop() {
+    if (!running) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawTrack();
+    smoothLaneMovement();
+    drawPlayer();
+    drawItems();
+
+    if (!gameOver) {
+      distance += speed;
+      updateProgress();
+      updateItems();
+      requestAnimationFrame(gameLoop);
+    }
+  }
+
+  // التحكم
+  function moveLeft() {
+    if (player.targetLane > 0) player.targetLane--;
+  }
+
+  function moveRight() {
+    if (player.targetLane < lanes - 1) player.targetLane++;
+  }
+
+  canvas.addEventListener("touchstart", e => {
+    const x = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+    if (!running && !gameOver) return; // أثناء الشاشات لا شيء
+    if (x < canvas.width / 2) moveLeft();
+    else moveRight();
+  });
+
+  window.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") moveLeft();
+    if (e.key === "ArrowRight") moveRight();
+  });
+
+  // أزرار الواجهات
+  startBtn.onclick = () => {
+    level = 1;
+    startScreen.style.display = "none";
+    levelCompleteScreen.style.display = "none";
+    gameOverScreen.style.display = "none";
+    recalcDifficulty();
+    startLevel();
+  };
+
+  nextLevelBtn.onclick = () => {
+    level++;
+    levelCompleteScreen.style.display = "none";
+    startLevel();
+  };
+
+  restartBtn.onclick = () => {
+    level = 1;
+    gameOverScreen.style.display = "none";
+    recalcDifficulty();
+    startLevel();
+  };
+</script>
+</body>
+</html>
