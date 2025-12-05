@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <title>Simple Collect Game - لعبة تجميع بسيطة</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --accent: #22c55e;
+      --accent2: #facc15;
+      --text: #f9fafb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #1e293b, #020617);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      color: var(--text);
+    }
+
+    .game-wrapper {
+      width: 100%;
+      max-width: 480px;
+      padding: 12px;
+    }
+
+    .card {
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+
+    .title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .title-main {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .title-sub {
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 10px;
+      font-size: 0.85rem;
+    }
+
+    .hud-item {
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 999px;
+      padding: 4px 10px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 120px;
+      justify-content: center;
+    }
+
+    .hud-label {
+      opacity: 0.8;
+    }
+
+    .hud-value {
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .lang-toggle {
+      cursor: pointer;
+      border: none;
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 0.75rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.2s;
+    }
+
+    .lang-toggle:hover {
+      background: rgba(148, 163, 184, 0.3);
+    }
+
+    .canvas-container {
+      background: radial-gradient(circle at top, #1f2937, #020617);
+      border-radius: 14px;
+      padding: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #020617;
+      border-radius: 10px;
+      border: 1px solid rgba(30, 64, 175, 0.6);
+    }
+
+    .controls-mobile {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .controls-row {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .btn-dir {
+      width: 56px;
+      height: 48px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text);
+      font-size: 1.2rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.8);
+      transition: transform 0.05s, background 0.1s;
+    }
+
+    .btn-dir:active {
+      transform: translateY(1px) scale(0.98);
+      background: rgba(34, 197, 94, 0.25);
+    }
+
+    .hint {
+      margin-top: 8px;
+      font-size: 0.75rem;
+      text-align: center;
+      opacity: 0.7;
+      line-height: 1.4;
+    }
+
+    @media (min-width: 700px) {
+      .game-wrapper {
+        max-width: 520px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-wrapper">
+    <div class="card">
+      <div class="title">
+        <div class="title-main" id="title-ar">🎮 لعبة تجميع النجوم</div>
+        <div class="title-main" id="title-en" style="display:none;">🎮 Star Collector Game</div>
+
+        <div class="title-sub" id="subtitle-ar">
+          حرّك الشخصية واجمع أكبر عدد من النجوم قبل انتهاء الوقت
+        </div>
+        <div class="title-sub" id="subtitle-en" style="display:none;">
+          Move the player and collect as many stars as you can before time runs out
+        </div>
+
+        <div style="margin-top:6px;">
+          <button class="lang-toggle" id="toggle-lang">
+            🌐 عربي / English
+          </button>
+        </div>
+      </div>
+
+      <div class="hud">
+        <div class="hud-item">
+          <span class="hud-label" id="score-label-ar">النقاط:</span>
+          <span class="hud-label" id="score-label-en" style="display:none;">Score:</span>
+          <span class="hud-value" id="score">0</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label" id="time-label-ar">الوقت:</span>
+          <span class="hud-label" id="time-label-en" style="display:none;">Time:</span>
+          <span class="hud-value" id="time">60</span>
+        </div>
+        <div class="hud-item">
+          <span class="hud-label" id="status-text-ar">ابدأ بالتحريك!</span>
+          <span class="hud-label" id="status-text-en" style="display:none;">Start moving!</span>
+        </div>
+      </div>
+
+      <div class="canvas-container">
+        <canvas id="gameCanvas" width="360" height="360"></canvas>
+      </div>
+
+      <div class="controls-mobile">
+        <div class="controls-row">
+          <button class="btn-dir" data-dir="up">▲</button>
+        </div>
+        <div class="controls-row">
+          <button class="btn-dir" data-dir="left">◀</button>
+          <button class="btn-dir" data-dir="down">▼</button>
+          <button class="btn-dir" data-dir="right">▶</button>
+        </div>
+        <div class="hint" id="hint-ar">
+          على الكمبيوتر: استخدم الأسهم أو W A S D<br />
+          على الجوال: استخدم الأزرار للتحريك
+        </div>
+        <div class="hint" id="hint-en" style="display:none;">
+          On desktop: use Arrow keys or W A S D<br />
+          On mobile: use the buttons to move
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ------ Language toggle ------
+    const langState = { arabic: true };
+
+    const toggleLangBtn = document.getElementById("toggle-lang");
+
+    const langPairs = [
+      ["title-ar", "title-en"],
+      ["subtitle-ar", "subtitle-en"],
+      ["score-label-ar", "score-label-en"],
+      ["time-label-ar", "time-label-en"],
+      ["status-text-ar", "status-text-en"],
+      ["hint-ar", "hint-en"],
+    ];
+
+    toggleLangBtn.addEventListener("click", () => {
+      langState.arabic = !langState.arabic;
+      langPairs.forEach(([arId, enId]) => {
+        document.getElementById(arId).style.display = langState.arabic ? "inline" : "none";
+        document.getElementById(enId).style.display = langState.arabic ? "none" : "inline";
+      });
+    });
+
+    // ------ Game setup ------
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const scoreEl = document.getElementById("score");
+    const timeEl = document.getElementById("time");
+    const statusAr = document.getElementById("status-text-ar");
+    const statusEn = document.getElementById("status-text-en");
+
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Player
+    const player = {
+      x: width / 2,
+      y: height / 2,
+      size: 24,
+      speed: 3.2,
+      vx: 0,
+      vy: 0,
+    };
+
+    // Star
+    const star = {
+      x: 0,
+      y: 0,
+      size: 14,
+    };
+
+    let score = 0;
+    let timeLeft = 60; // seconds
+    let gameOver = false;
+
+    function placeStar() {
+      const margin = 20;
+      star.x = Math.random() * (width - margin * 2) + margin;
+      star.y = Math.random() * (height - margin * 2) + margin;
+    }
+
+    placeStar();
+
+    // ------ Input (keyboard) ------
+    const keys = {};
+
+    window.addEventListener("keydown", (e) => {
+      keys[e.key.toLowerCase()] = true;
+    });
+
+    window.addEventListener("keyup", (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    function updateVelocityFromKeys() {
+      let vx = 0;
+      let vy = 0;
+
+      if (keys["arrowup"] || keys["w"]) vy -= 1;
+      if (keys["arrowdown"] || keys["s"]) vy += 1;
+      if (keys["arrowleft"] || keys["a"]) vx -= 1;
+      if (keys["arrowright"] || keys["d"]) vx += 1;
+
+      const length = Math.hypot(vx, vy) || 1;
+      player.vx = (vx / length) * player.speed;
+      player.vy = (vy / length) * player.speed;
+    }
+
+    // ------ Mobile buttons ------
+    const dirButtons = document.querySelectorAll(".btn-dir");
+    let mobileDir = { up: false, down: false, left: false, right: false };
+
+    dirButtons.forEach((btn) => {
+      const dir = btn.getAttribute("data-dir");
+
+      const start = (e) => {
+        e.preventDefault();
+        mobileDir[dir] = true;
+      };
+      const end = (e) => {
+        e.preventDefault();
+        mobileDir[dir] = false;
+      };
+
+      btn.addEventListener("mousedown", start);
+      btn.addEventListener("touchstart", start, { passive: false });
+
+      window.addEventListener("mouseup", end);
+      window.addEventListener("touchend", end, { passive: false });
+      window.addEventListener("touchcancel", end, { passive: false });
+    });
+
+    function applyMobileDir() {
+      let vx = 0;
+      let vy = 0;
+
+      if (mobileDir.up) vy -= 1;
+      if (mobileDir.down) vy += 1;
+      if (mobileDir.left) vx -= 1;
+      if (mobileDir.right) vx += 1;
+
+      if (vx !== 0 || vy !== 0) {
+        const length = Math.hypot(vx, vy) || 1;
+        player.vx = (vx / length) * player.speed;
+        player.vy = (vy / length) * player.speed;
+      }
+    }
+
+    // ------ Game loop ------
+    function update() {
+      if (gameOver) return;
+
+      // Controls (keyboard first)
+      updateVelocityFromKeys();
+
+      // If no keyboard input, use mobile buttons
+      if (
+        !keys["arrowup"] &&
+        !keys["arrowdown"] &&
+        !keys["arrowleft"] &&
+        !keys["arrowright"] &&
+        !keys["w"] &&
+        !keys["a"] &&
+        !keys["s"] &&
+        !keys["d"]
+      ) {
+        applyMobileDir();
+      }
+
+      player.x += player.vx;
+      player.y += player.vy;
+
+      // Bounds
+      const half = player.size / 2;
+      if (player.x < half) player.x = half;
+      if (player.x > width - half) player.x = width - half;
+      if (player.y < half) player.y = half;
+      if (player.y > height - half) player.y = height - half;
+
+      // Collision with star
+      const dist = Math.hypot(player.x - star.x, player.y - star.y);
+      if (dist < player.size / 2 + star.size / 2) {
+        score++;
+        scoreEl.textContent = score;
+        placeStar();
+
+        statusAr.textContent = "رائع! استمر 👌";
+        statusEn.textContent = "Nice! Keep going 👌";
+      }
+    }
+
+    function drawGrid() {
+      ctx.save();
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.2)";
+      ctx.lineWidth = 1;
+
+      const step = 30;
+      for (let x = step; x < width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = step; y < height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Background glow
+      const grad = ctx.createRadialGradient(
+        width / 2,
+        height / 2,
+        10,
+        width / 2,
+        height / 2,
+        width / 1.2
+      );
+      grad.addColorStop(0, "#020617");
+      grad.addColorStop(1, "#000000");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+
+      drawGrid();
+
+      // Star
+      ctx.save();
+      ctx.translate(star.x, star.y);
+      ctx.beginPath();
+      const spikes = 5;
+      const outerRadius = star.size;
+      const innerRadius = star.size / 2.4;
+      for (let i = 0; i < spikes * 2; i++) {
+        const radius = i % 2 === 0 ? outerRadius : innerRadius;
+        const angle = (i * Math.PI) / spikes;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      const gradStar = ctx.createRadialGradient(0, 0, 0, 0, 0, outerRadius);
+      gradStar.addColorStop(0, "#fef9c3");
+      gradStar.addColorStop(1, "#facc15");
+      ctx.fillStyle = gradStar;
+      ctx.fill();
+      ctx.shadowColor = "#facc15";
+      ctx.shadowBlur = 18;
+      ctx.restore();
+
+      // Player
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      const gradPlayer = ctx.createLinearGradient(
+        -player.size / 2,
+        -player.size / 2,
+        player.size / 2,
+        player.size / 2
+      );
+      gradPlayer.addColorStop(0, "#22c55e");
+      gradPlayer.addColorStop(1, "#16a34a");
+      ctx.fillStyle = gradPlayer;
+      ctx.roundRect(
+        -player.size / 2,
+        -player.size / 2,
+        player.size,
+        player.size,
+        6
+      );
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    // ------ Timer ------
+    function tick() {
+      if (gameOver) return;
+      timeLeft--;
+      if (timeLeft < 0) timeLeft = 0;
+      timeEl.textContent = timeLeft;
+
+      if (timeLeft <= 0) {
+        gameOver = true;
+        statusAr.textContent = `انتهى الوقت! مجموع نقاطك: ${score}`;
+        statusEn.textContent = `Time's up! Your score: ${score}`;
+      }
+    }
+
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>
